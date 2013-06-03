@@ -855,12 +855,23 @@ define(["core/grapher/BTCore"], function(BTCore) {
                 //			channel["style"]);
                 //			plot.addDataPointListener(commentDataPointListener(channelElementId));
             } else {
-                // Set up the plot and axes for this channel using the grapher API
-                plot = new DataSeriesPlot(channelDatasource(App.getUID(), channel["device_name"], channel["channel_name"]),
-                    grapher.dateAxis,
-                    yAxis,
-                    {"style": channel["style"], "localDisplay": channel["time_type"] == "local"});
-                plot.addDataPointListener(function(pointObj, sourceInfo){dataPointListener(grapher,pointObj, sourceInfo)});
+                // TODO: This is a hack!
+                // TODO: Implement a UI to choose the DFT plot instead
+                // of auto-selecting DFT on PolarStrap but nothing else
+                if (channel["device_name"] == "PolarStrap") {
+                    console.log("For device PolarStrap, using spectral plot instead");
+                    plot = new SpectralSeriesPlot(channelDatasource(App.getUID(), channel["device_name"], channel["channel_name"] + ".DFT"),
+                        grapher.dateAxis,
+                        yAxis,
+                        {"localDisplay": channel["time_type"] == "local"});
+                } else {
+                    // Set up the plot and axes for this channel using the grapher API
+                    plot = new DataSeriesPlot(channelDatasource(App.getUID(), channel["device_name"], channel["channel_name"]),
+                        grapher.dateAxis,
+                        yAxis,
+                        {"style": channel["style"], "localDisplay": channel["time_type"] == "local"});
+                    plot.addDataPointListener(function(pointObj, sourceInfo){dataPointListener(grapher,pointObj, sourceInfo)});
+                }
             }
 
             var plotContainer = new PlotContainer(plotElementId, false, [plot]);

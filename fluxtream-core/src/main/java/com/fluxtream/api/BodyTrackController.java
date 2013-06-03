@@ -459,17 +459,36 @@ public class BodyTrackController {
     @GET
     @Path("/tiles/{UID}/{DeviceNickname}.{ChannelName}/{Level}.{Offset}.json")
     @Produces({MediaType.APPLICATION_JSON})
-    public String fetchTile(@PathParam("UID") Long uid, @PathParam("DeviceNickname") String deviceNickname,
-                                   @PathParam("ChannelName") String channelName, @PathParam("Level") int level, @PathParam("Offset") long offset){
-        try{
+    public String fetchTile(@PathParam("UID") Long uid,
+                            @PathParam("DeviceNickname") String deviceNickname,
+                            @PathParam("ChannelName") String channelName,
+                            @PathParam("Level") int level,
+                            @PathParam("Offset") long offset) {
+        return fetchTileImpl(uid, deviceNickname, channelName, level, offset, false);
+    }
+
+    @GET
+    @Path("/tiles/{UID}/{DeviceNickname}.{ChannelName}.DFT/{Level}.{Offset}.json")
+    @Produces({MediaType.APPLICATION_JSON})
+    public String fetchSpectralTile(@PathParam("UID") Long uid,
+                                    @PathParam("DeviceNickname") String deviceNickname,
+                                    @PathParam("ChannelName") String channelName,
+                                    @PathParam("Level") int level,
+                                    @PathParam("Offset") long offset) {
+        return fetchTileImpl(uid, deviceNickname, channelName, level, offset, true);
+    }
+
+    private String fetchTileImpl(final Long uid, final String deviceNickname, final String channelName,
+                                 final int level, final long offset, final boolean dft) {
+        try {
             long loggedInUserId = AuthHelper.getGuestId();
             boolean accessAllowed = checkForPermissionAccess(uid);
             CoachingBuddy coachee = coachingService.getCoachee(loggedInUserId, uid);
-            if (!accessAllowed&&coachee==null){
-                uid = null;
-            }
-            return bodyTrackHelper.fetchTile(uid, deviceNickname, channelName, level, offset);
-        } catch (Exception e){
+            if (!accessAllowed && coachee == null)
+                return bodyTrackHelper.fetchTile(null, deviceNickname, channelName, level, offset, dft);
+            else
+                return bodyTrackHelper.fetchTile(uid, deviceNickname, channelName, level, offset, dft);
+        } catch (Exception e) {
             return gson.toJson(new StatusModel(false, "Access Denied"));
         }
     }

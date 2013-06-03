@@ -184,24 +184,55 @@ public class BodyTrackHelper {
          }
      }
 
-    public String fetchTile(Long uid, String deviceNickname, String channelName, int level, long offset){
-        try{
+    public String fetchTile(Long uid, String deviceNickname, String channelName, int level, long offset, boolean dft) {
+        if (dft)
+            return fetchSpectralTile(uid, deviceNickname, channelName, level, offset);
+        else
+            return fetchStandardTile(uid, deviceNickname, channelName, level, offset);
+    }
+
+    public String fetchStandardTile(Long uid, String deviceNickname, String channelName, int level, long offset) {
+        try {
             if (uid == null)
                 throw new IllegalArgumentException();
-            final DataStoreExecutionResult dataStoreExecutionResult = executeDataStore("gettile", new Object[]{uid, deviceNickname + "." + channelName, level, offset});
+
+            final DataStoreExecutionResult dataStoreExecutionResult = executeDataStore("gettile",
+                new Object[]{uid, deviceNickname + "." + channelName, level, offset});
             String result = dataStoreExecutionResult.getResponse();
 
             // TODO: check statusCode in DataStoreExecutionResult
-            GetTileResponse tileResponse = gson.fromJson(result,GetTileResponse.class);
+            StandardTile tileResponse = gson.fromJson(result, StandardTile.class);
 
-            if (tileResponse.data == null){
-                tileResponse = GetTileResponse.getEmptyTile(level,offset);
-            }//TODO:several fields are missing still and should be implemented
+            if (tileResponse.data == null)
+                tileResponse = StandardTile.getEmptyTile(level, offset);
+            //TODO:several fields are missing still and should be implemented
 
             return gson.toJson(tileResponse);
+        } catch(Exception e) {
+            return gson.toJson(StandardTile.getEmptyTile(level, offset));
         }
-        catch(Exception e){
-            return gson.toJson(GetTileResponse.getEmptyTile(level,offset));
+    }
+
+    public String fetchSpectralTile(Long uid, String deviceNickname, String channelName, int level, long offset) {
+        try {
+            if (uid == null)
+                throw new IllegalArgumentException();
+
+            final String deviceChannelArgument = String.format("%s.%s.DFT", deviceNickname, channelName);
+
+            final DataStoreExecutionResult dataStoreExecutionResult = executeDataStore("gettile",
+                new Object[]{uid, deviceChannelArgument, level, offset});
+            String result = dataStoreExecutionResult.getResponse();
+
+            // TODO: check statusCode in DataStoreExecutionResult
+            SpectralTile tileResponse = gson.fromJson(result, SpectralTile.class);
+
+            if (tileResponse.dft == null)
+                tileResponse = SpectralTile.getEmptyTile(level, offset);
+
+            return gson.toJson(tileResponse);
+        } catch(Exception e) {
+            return gson.toJson(SpectralTile.getEmptyTile(level, offset));
         }
     }
 
@@ -545,19 +576,35 @@ public class BodyTrackHelper {
         double max;
     }
 
-    private static class GetTileResponse{
+    private static class StandardTile {
         Object[][] data;
         String[] fields;
         int level;
         long offset;
         int sample_width;
 
-        public static GetTileResponse getEmptyTile(int level, long offset){
-            GetTileResponse tileResponse = new GetTileResponse();
+        public static StandardTile getEmptyTile(int level, long offset){
+            StandardTile tileResponse = new StandardTile();
             tileResponse.data = new Object[0][];
             tileResponse.level = level;
             tileResponse.offset = offset;
             tileResponse.fields = new String[]{"time", "mean", "stddev", "count"};
+            return tileResponse;
+        }
+    }
+
+    private static class SpectralTile {
+        String dft;
+        int num_values;
+        int level;
+        long offset;
+
+        public static SpectralTile getEmptyTile(final int level, final long offset) {
+            SpectralTile tileResponse = new SpectralTile();
+            tileResponse.dft = "";
+            tileResponse.num_values = 256;
+            tileResponse.level = level;
+            tileResponse.offset = offset;
             return tileResponse;
         }
     }
