@@ -594,14 +594,14 @@ public class BodyTrackHelper {
     }
 
     private static class SpectralTile {
-        String dft;
+        double[][] dft;
         int num_values;
         int level;
         long offset;
 
         public static SpectralTile getEmptyTile(final int level, final long offset) {
             SpectralTile tileResponse = new SpectralTile();
-            tileResponse.dft = "";
+            tileResponse.dft = new double[0][0];
             tileResponse.num_values = 256;
             tileResponse.level = level;
             tileResponse.offset = offset;
