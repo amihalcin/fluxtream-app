@@ -4,7 +4,6 @@
 ::-moz-selection    {background: rgb(255,255,158);}
 img::selection      {background: transparent;}
 img::-moz-selection {background: transparent;}
-body {-webkit-tap-highlight-color: rgb(255,255,158);}
 
 @media (max-width: 768px){
     .flx-main-city-infos {  }
@@ -212,16 +211,26 @@ a.paginationLink {
     display: block;
 }
 
-.application.dormant {
-    display: none;
+.application.dormant { //hacky way of fixing comment display bug
+    position:fixed;
+    top:0px;
+    margin-top:-1000px;
+    height:500px;
+    overflow:hidden;
+    //display: none;
 }
 
 .tab.active {
     display: block;
 }
 
-.tab.dormant {
-    display: none;
+.tab.dormant {        //hacky way of fixing comment display bug
+    position:fixed;
+    top:0px;
+    margin-top:-1000px;
+    height:500px;
+    overflow:hidden;
+    //display: none;
 }
 
 .fullwidth {

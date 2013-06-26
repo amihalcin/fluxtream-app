@@ -146,6 +146,7 @@ define(["core/grapher/BTCore"], function(BTCore) {
             // will automatically shrink if the Add Channels and/or Details pane is visible, so we don't explicitly need
             // to account for them here).
             var plotContainerWidth = $("#" + grapher.grapherId + "_timeline_channelsArea").width() - widthOfAreaLeftOfPlotContainer - widthOfAreaRightOfPlotContainer - widthOfPlotContainerLeftAndRightBorder - 20;
+            if (plotContainerWidth < 1) plotContainerWidth = 1; //sometimes the calculated value can be negative. This can cause crashes in IE so we force it to be > 0
 
             // resize plot containers
             var plotContainerEventId = SequenceNumber.getNext();
@@ -688,34 +689,72 @@ define(["core/grapher/BTCore"], function(BTCore) {
         return false;
     }
 
-    Grapher.prototype.toggleDetailsPane = function() {
-        var area = $("#" + this.grapherId + "_timeline_detailsArea");
-        if (area.css("display") === "none") {
-            $("#" + this.grapherId + "_timeline_show_details_btn").addClass("active");
-            area.show();
+    Grapher.prototype.removeChannel = function(channel){
+        var deviceName;
+        var channelName;
+        var channelElementId = null;
+        var firstPeriod = channel.indexOf(".");
+        if (firstPeriod > 0){
+            deviceName = channel.substring(0,firstPeriod);
+            channelName = channel.substring(firstPeriod + 1);
         }
-        else {
-            $("#" + this.grapherId + "_timeline_show_details_btn").removeClass("active");
-            area.hide();
+        else{
+            channelElementId = channel;
         }
 
-        // call the resize handler to ensure that the grapher gets resized
-        TOOLS.resizeHandler();
+        if (channelElementId == null){
+            var channelElement = $("#" + this.grapherId +"_timeline_channel_" + deviceName + "_" + channelName);
+            if (channelElement.length != 0){
+                channelElementId = channelElement.parent().attr("id");
+            }
 
+        }
+        if (channelElementId != null){
+            this.plotContainersMap[channelElementId].removePlot(this.plotsMap[channelElementId]);
+            $("#" + channelElementId).remove();
+            delete this.channelsMap[channelElementId];
+        }
+    }
+
+    Grapher.prototype.hasChannel = function(channelName){
+        for (var member in this.channelsMap){
+            if (this.channelsMap[member].device_name + "." + this.channelsMap[member].channel_name == channelName)
+                return true;
+        }
         return false;
     }
 
-    Grapher.prototype.removeChannel = function(channel){
-        var firstPeriod = channel.indexOf(".");
-        var deviceName = channel.substring(0,firstPeriod);
-        var channelName = channel.substring(firstPeriod + 1);
+    Grapher.prototype.doCursorClick = function(plot){
+        if (plot.indexOf)
+            plot = this.getPlot(plot);
+        if (plot != null)
+            plot.doCursorClick();
+    }
 
-        var channelElement = $("#" + this.grapherId +"_timeline_channel_" + deviceName + "_" + channelName);
-        if (channelElement.length != 0){
-            var channelElementId = channelElement.parent().attr("id");
-            this.plotContainersMap[channelElementId].removePlot(this.plotsMap[channelElementId]);
-            $(channelElement.parent()).remove();
+    Grapher.prototype.getPlot = function(channel){
+        var deviceName;
+        var channelName;
+        var channelElementId = null;
+        var firstPeriod = channel.indexOf(".");
+        if (firstPeriod > 0){
+            deviceName = channel.substring(0,firstPeriod);
+            channelName = channel.substring(firstPeriod + 1);
         }
+        else{
+            channelElementId = channel;
+        }
+
+        if (channelElementId == null){
+            var channelElement = $("#" + this.grapherId +"_timeline_channel_" + deviceName + "_" + channelName);
+            if (channelElement.length != 0){
+                channelElementId = channelElement.parent().attr("id");
+            }
+
+        }
+        if (channelElementId == null)
+            return null
+        return this.plotsMap[channelElementId];
+
     }
 
     // Add new channel to target
@@ -740,6 +779,7 @@ define(["core/grapher/BTCore"], function(BTCore) {
             if (channel == null)
                 return;
             var channel = grapher.sourcesMap[channel.id];
+            console.log(channel);
         }
 
         App.loadMustacheTemplate("core/grapher/timelineTemplates.html","channelTemplate",function(template){
@@ -900,9 +940,7 @@ define(["core/grapher/BTCore"], function(BTCore) {
                     event.preventDefault();
                     if (!grapher.showDeleteBtn)
                         return;
-                    var channelElement = $(this).parents("._timeline_channel").parent();
-                    plotContainer.removePlot(plot);
-                    $(channelElement).remove();
+                    grapher.removeChannel(channelElementId);
                 });
 
             // Drag to resize
@@ -1609,9 +1647,6 @@ define(["core/grapher/BTCore"], function(BTCore) {
             $("#" + grapher.grapherId + "_timeline_add_channels_btn").unbind('click')
                 .click(function(){grapher.toggleAddChannelsPane(); return false;})
                 .removeClass("disabled");
-            $("#" + grapher.grapherId + "_timeline_show_details_btn").unbind('click')
-                .click(function(){grapher.toggleDetailsPane(); return false;})
-                .removeClass("disabled");
 
             grapher.dateAxis.setRange(view["v2"]["x_axis"]["min"],
                 view["v2"]["x_axis"]["max"]);
@@ -1640,9 +1675,6 @@ define(["core/grapher/BTCore"], function(BTCore) {
             $("#" + grapher.grapherId + "_timeline_add_channels_btn").unbind('click')
                 .click(function(){grapher.toggleAddChannelsPane(); return false;})
                 .removeClass("disabled");
-            $("#" + grapher.grapherId + "_timeline_show_details_btn").unbind('click')
-                .click(function(){grapher.toggleDetailsPane(); return false;})
-                .removeClass("disabled");
 
             // Show/hide add channels pane
             if ((typeof view["v2"]["show_add_pane"] === "undefined") ||
@@ -1662,7 +1694,15 @@ define(["core/grapher/BTCore"], function(BTCore) {
                 "min" : view["v2"]["x_axis"]["min"],
                 "max" : view["v2"]["x_axis"]["max"]
             });
-            grapher.dateAxis.addAxisChangeListener(function() {
+            grapher.cursorString = null;
+            grapher.prevCursorPos = null;
+            grapher.dateAxis.addAxisChangeListener(function(event) {
+                if (event.cursorPosition != grapher.prevCursorPos){
+                    grapher.prevCursorPos = event.cursorPosition;
+                    grapher.cursorString = event.cursorPositionString;
+                    grapher.clickPointString = null;
+                }
+                updateDataPointDisplay(grapher);
                 var center = (grapher.dateAxis.getMin() + grapher.dateAxis.getMax()) / 2.0;
                 var utcOffsetHrs = new Date(center * 1000).getTimezoneOffset() / -60;
                 // 60 mins/hour, and offset is backwards of the convention
@@ -2092,11 +2132,30 @@ define(["core/grapher/BTCore"], function(BTCore) {
     function dataPointListener(grapher, pointObj, sourceInfo) {
         if (pointObj) {
             App.loadMustacheTemplate("core/grapher/timelineTemplates.html","dataPointValueLabel",function (template){
-                $("#" + grapher.grapherId + "_timeline_dataPointValueLabel").html(template.render(pointObj));
+                if (sourceInfo.actionName == "highlight")
+                    grapher.pointString = template.render(pointObj);
+                else if (sourceInfo.actionName == "click")
+                    grapher.clickPointString = template.render(pointObj);
+                updateDataPointDisplay(grapher);
             });
         } else {
-            $("#" + grapher.grapherId + "_timeline_dataPointValueLabel").html("");
+            grapher.pointString = null;
+            updateDataPointDisplay(grapher);
         }
+    }
+
+    function updateDataPointDisplay(grapher){
+        var stringToUse = "";
+        if (grapher.pointString != null){
+            stringToUse = grapher.pointString;
+        }
+        else if (grapher.clickPointString != null){
+            stringToUse = grapher.clickPointString
+        }
+        else if (grapher.cursorString != null){
+            stringToUse = grapher.cursorString;
+        }
+        $("#" + grapher.grapherId + "_timeline_dataPointValueLabel").html(stringToUse);
     }
 
     function loadLogrecMetadata(logrecId, callbacks) {
@@ -2220,13 +2279,6 @@ define(["core/grapher/BTCore"], function(BTCore) {
                         });
                     }
 
-                    /*
-                    // TODO: do I need this?
-                    if (typeof data === 'string') {
-                        data = JSON.parse(data);
-                    }
-                    */
-
                     // treat undefined or null comment as an empty comment
                     if (typeof photoMetadata['comment'] === 'undefined' || photoMetadata['comment'] == null) {
                         photoMetadata['comment'] = '';
@@ -2257,8 +2309,10 @@ define(["core/grapher/BTCore"], function(BTCore) {
                                 theImage.attr("src",highResImageUrl);
                                 if (photoOrientation <= 4) {
                                     theImage.width(imageWidth).height(imageHeight);
+                                    theImage.css("max-width", imageWidth).css("max-height", imageHeight);
                                 } else {
                                     theImage.width(imageHeight).height(imageWidth);
+                                    theImage.css("max-width", imageHeight).css("max-height", imageWidth);
                                 }
                                 theImage.removeClass("_timeline_photo_dialog_image_orientation_1");
                                 theImage.addClass(highResOrientationCssClass);
@@ -2271,16 +2325,22 @@ define(["core/grapher/BTCore"], function(BTCore) {
 
                                 theImage.attr("src", mediumResImageUrl);
 
+                                var originalWidth = theImage.width();
+                                var originalHeight = theImage.height();
                                 var imageHeight = 300;
                                 var imageWidth = 300;
-                                var imageAspectRatio = (photoOrientation <= 4 ) ? theImage.width() / theImage.height() : theImage.height() / theImage.width();
+                                var imageAspectRatio = (photoOrientation <= 4 ) ? originalWidth / originalHeight : originalHeight / originalWidth;
                                 if (imageAspectRatio > 1) {
                                     imageHeight = Math.round(imageWidth / imageAspectRatio);
                                 } else {
                                     imageWidth = imageAspectRatio * imageHeight;
                                 }
 
-                                theImage.width(imageWidth).height(imageHeight);
+                                if (originalWidth != 0 && originalHeight != 0 && !isNaN(imageWidth) && !isNaN(imageHeight)) {
+                                    theImage.width(imageWidth).height(imageHeight);
+                                }
+                                theImage.css("max-width", "300").css("max-height", "300");
+
                                 $("._timeline_photo_dialog_photo_table").width(300).height(300);
                                 centerPhotoDialog(grapher);
                                 theImage.removeClass(highResOrientationCssClass);
@@ -2857,6 +2917,24 @@ define(["core/grapher/BTCore"], function(BTCore) {
             grapher.dateAxis.setRange(start, end);
             repaintAllPlots(grapher);
         });
+    }
+
+    Grapher.prototype.getRange = function(){
+        return {min:this.dateAxis.getMin(), max:this.dateAxis.getMax()};
+    }
+
+    Grapher.prototype.getCenter = function(){
+        var range = this.getRange();
+        return (range.min + range.max) / 2;
+    }
+
+    Grapher.prototype.setTimeCursorPosition = function(position){
+        this.dateAxis.setCursorPosition(position);
+        repaintAllPlots(this);
+    }
+
+    Grapher.prototype.getTimeCursorPosition = function(){
+        return this.dateAxis.getCursorPosition();
     }
 
     function repaintAllPlots(grapher) {
